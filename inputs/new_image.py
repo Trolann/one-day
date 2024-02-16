@@ -1,3 +1,7 @@
+from openai import OpenAI
+from settings import OPENAI_API_KEY, image_sys_prompt, image_user_prompt
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 def is_image(url):
@@ -15,3 +19,46 @@ def is_image(url):
         # In case of any error, log it and return False
         print(f"Error: {e}")
         return False
+
+def process_image_requests(image_requests: list):
+    print(f"Processing {len(image_requests)} image requests")
+    responses = []
+    for request in image_requests:
+        message = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": image_sys_prompt},
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": request["prompt"] + image_user_prompt
+                    },
+                ],
+            }
+        ]
+        for image_url in request.get("images", []):
+            if not image_url:
+                continue
+            message[1]["content"].append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_url,
+                    }
+                }
+            )
+            print("Added image url to message")
+        print(message)
+        response = client.chat.completions.create(
+            model="gpt-4-vision-preview",
+            messages=message,
+            max_tokens=300,
+        )
+        print('Got a gpt response!')
+        responses.append(response)
+    return responses

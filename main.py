@@ -2,7 +2,7 @@ from multiprocessing import Process, Pipe
 from dispatch.discord_bot import run_bot
 from time import sleep
 from settings import GENERAL_CHAN_ID
-from inputs.new_image import is_image
+from inputs.new_image import process_image_requests
 
 if __name__ == '__main__':
     # Setup a pipe for each task on the other side to consume
@@ -22,13 +22,19 @@ if __name__ == '__main__':
         #message = input("Enter a message to send to Discord (q to quit): ")
         message = 'ping?'
         if p_images.poll():
-            messages = {}
+            image_requests = []
             # Consume all messages from the pipe in id:content pairs
             while p_images.poll():
-                request_dict = p_images.recv()
+                image_requests.append(p_images.recv())
+                request_dict = image_requests[-1]
                 print(f"ID: {request_dict['message_id']}")
                 print(f"Request: {request_dict}")
-                p_raw_msg.send((GENERAL_CHAN_ID, f"Received {request_dict['message_id']}"))
+            responses = process_image_requests(image_requests)
+            #print(f'Responses: {responses}')
+            print(f"Resonses[0].choice[0].message.content: {responses[0].choices[0].message.content}")
+            p_raw_msg.send((GENERAL_CHAN_ID, "```\n" + responses[0].choices[0].message.content + "\n```"))
+
+
         if p_raw_msg.poll():
             message = p_raw_msg.recv()
             print(f"Received message: {message}")
