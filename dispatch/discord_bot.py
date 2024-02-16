@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from settings import DISCORD_API_KEY
 from multiprocessing import Pipe
+from inputs.new_image import is_image
 import asyncio
 
 # Set up intents to listen for user messages and member join events
@@ -14,6 +15,7 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 
 systems_pipe: Pipe = None
 raw_message_pipe: Pipe = None
+image_pipe: Pipe = None
 
 @bot.event
 async def on_ready():
@@ -37,12 +39,28 @@ async def on_message(message):
         await message.reply('pong!')
         return
 
-    if raw_message_pipe:
-        if message.attachments:
-            for attachment in message.attachments:
-                raw_message_pipe.send((message.id, attachment.url))
-        if message.content:
-            raw_message_pipe.send((message.id, message.content))
+
+    if message.attachments:
+        images = []
+        files = []
+        for attachment in message.attachments:
+            if is_image(attachment.url):
+                images.append(attachment.url)
+            else:
+                files.append(attachment.url)
+
+        request_dict = {
+            'message_id': message.id,
+            'prompt': message.content
+        }
+        if images:
+            request_dict['images'] = images
+        if files:
+            request_dict['files'] = files
+        image_pipe.send(request_dict)
+        return
+    if message.content:
+        raw_message_pipe.send((message.id, message.content))
 
 @bot.command()
 async def ping(ctx):
@@ -60,14 +78,15 @@ async def send_raw_message():
             else:
                 print(f"Channel with id {channel_id} not found")
 
-def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe):
+def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, image_pipe_to_parent: Pipe):
     print("Starting bot")
     global raw_message_pipe
     global systems_pipe
+    global image_pipe
     systems_pipe = systems_pipe_to_parent
     raw_message_pipe = raw_message_pipe_to_parent
+    image_pipe = image_pipe_to_parent
     asyncio.run(bot.start(DISCORD_API_KEY))
 
 if __name__ == '__main__':
-    import asyncio
     asyncio.run(run_bot())
