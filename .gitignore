@@ -1,1 +1,7 @@
 *.env
+*.idea
+*.idea/*
+*.iml
+*.xml
+*.log
+__pycache__/
