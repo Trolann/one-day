@@ -1,4 +1,5 @@
 import discord
+from time import time, sleep
 from discord.ext import commands, tasks
 from settings import DISCORD_API_KEY
 from multiprocessing import Pipe
@@ -32,6 +33,13 @@ async def on_message(message):
     # Ignore messages from the bot itself
     if message.author == bot.user:
         return
+
+    if message.content.lower().startswith('!amazon'):
+        print(f"Received amazon command from {message.author}")
+        raw_message_pipe.send((message.id, message.content))
+        return
+
+
 
     # A simple ping pong to see if the bot is responding at all, before any other branches
     if message.content.lower().startswith('ping?'):
@@ -71,12 +79,43 @@ async def ping(ctx):
 async def send_raw_message():
     if raw_message_pipe:
         while raw_message_pipe.poll():
+            print("Received message from raw_message_pipe pipe")
             channel_id, message = raw_message_pipe.recv()
             channel = bot.get_channel(channel_id)
+
             if channel:
-                await channel.send(message)
+                if type(message) is list:
+                    send_strs = await trim_messages(message)
+                else:
+                    send_strs = [message]
+                for send_str in send_strs:
+                    try:
+                        await channel.send(send_str)
+                    except Exception as e:
+                        print(f"Error: {e}")
+                        await channel.send(f'Error: {e}')
+                        print(f"Message: {send_str}")
+                print('Sent message')
             else:
                 print(f"Channel with id {channel_id} not found")
+
+
+async def trim_messages(message):
+    print(f"Message is a list of length {len(message)}")
+    send_strs = []
+    send_str = ""
+    for item in message:
+        item_str = f"{item}\n"  # Convert dictionary to string and add newline
+        if len(send_str + item_str) <= 2000:
+            send_str += item_str
+        else:
+            send_strs.append(f"```python\n{send_str}\n```")  # Append the current string to send_strs
+            send_str = item_str  # Start a new send_str with the current item
+    # Make sure to add the last send_str if it's not empty
+    if send_str:
+        send_strs.append(f"```python\n{send_str}\n```")
+    return send_strs
+
 
 def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, image_pipe_to_parent: Pipe):
     print("Starting bot")
