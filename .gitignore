@@ -5,3 +5,6 @@
 *.xml
 *.log
 __pycache__/
+*.png
+*.pkl
+*.json
