@@ -17,6 +17,7 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 systems_pipe: Pipe = None
 raw_message_pipe: Pipe = None
 image_pipe: Pipe = None
+audio_pipe: Pipe = None
 
 @bot.event
 async def on_ready():
@@ -63,9 +64,10 @@ async def on_message(message):
         }
         if images:
             request_dict['images'] = images
-        if files:
-            request_dict['files'] = files
-        image_pipe.send(request_dict)
+            image_pipe.send(request_dict)
+        if '.ogg' in files[0]:
+            request_dict['audio'] = files
+            audio_pipe.send(request_dict)
         return
     if message.content:
         raw_message_pipe.send((message.id, message.content))
@@ -117,14 +119,16 @@ async def trim_messages(message):
     return send_strs
 
 
-def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, image_pipe_to_parent: Pipe):
+def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, image_pipe_to_parent: Pipe, audio_pipe_to_parent: Pipe):
     print("Starting bot")
     global raw_message_pipe
     global systems_pipe
     global image_pipe
+    global audio_pipe
     systems_pipe = systems_pipe_to_parent
     raw_message_pipe = raw_message_pipe_to_parent
     image_pipe = image_pipe_to_parent
+    audio_pipe = audio_pipe_to_parent
     asyncio.run(bot.start(DISCORD_API_KEY))
 
 if __name__ == '__main__':

@@ -41,9 +41,11 @@ def parse_amazon_text(text):
     run_results = loads(run.model_dump_json())
     result_dict = loads(run_results['required_action']['submit_tool_outputs']['tool_calls'][0]['function']['arguments'])
 
+    # TODO: replace with a database
     with open('amazon.json', 'a') as f:
         f.write(str(result_dict))
         f.write('\n')
+
     return result_dict
 
 def login(headless=False):
@@ -93,13 +95,15 @@ def get_trans_list(headless=False):
     parse_driver.set_window_size(225, total_height - (580 * 2))
 
     image_strings = []
+    pages = 0
     for page in range(1, 4):
         sleep(5)
         print(f'Parsing page {page}')
-        # Save a screenshot
+        # Save a screenshot (for debugging)
         parse_driver.execute_script("window.scrollTo(0, 0);")
         parse_driver.save_screenshot(f'page_{page}.png')
         print(f'Saved screenshot of page {page}')
+        pages = page
         #image = Image.open(f'page_{page}.png')
         #image = image.crop((25, 330, 300, total_height - (580 * 2)))
         #image_strings.append(image_to_string(image))
@@ -123,6 +127,10 @@ def get_trans_list(headless=False):
     print('Getting matches')
     matches = find_matching_substrings(image_strings)
     print(matches)
+    # delete the screenshots
+    for page in range(1, pages + 1):
+        remove(f'page_{page}.png')
+
     return matches
 
 def find_matching_substrings(strings):

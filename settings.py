@@ -13,8 +13,7 @@ You are an assistant being tasked with extracting the contents of the image belo
 and add any meaningful data into a concise bulletized list.
 
 If the image is of a whiteboard it is likely containing notes about items todo around the house, shopping lists for 
-groceries or purchases of household goods, or schedule items for members of the 4 person household. If an item is 
-crossed out, indicate it using markdown ~~crossed out~~. 
+groceries or purchases of household goods, or schedule items for members of the 4 person household. 
 
 Preexisting lists:
 - Costco
