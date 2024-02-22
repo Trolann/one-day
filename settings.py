@@ -38,3 +38,5 @@ amazon_user_prompt = "Please extract the order number, the amount and the items 
 AMAZON_LOGIN = getenv("AMAZON_LOGIN")
 AMAZON_PASSWORD = getenv("AMAZON_PASSWORD")
 AMAZON_ASSISTANT_ID = getenv("AMAZON_ASSISTANT_ID")
+VIKUNJA_API_KEY = getenv("VIKUNJA_API_KEY")
+VIKUNJA_API_URL = getenv("VIKUNJA_API_URL")
