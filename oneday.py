@@ -4,6 +4,7 @@ from time import sleep
 from settings import GENERAL_CHAN_ID
 from inputs.new_image import process_image_requests
 from inputs.new_audio import download_and_convert, get_transcript
+from outputs.list_parser import parse_list
 
 if __name__ == '__main__':
     # Setup a pipe for each task on the other side to consume
@@ -55,7 +56,6 @@ if __name__ == '__main__':
                             continue
 
                 p_raw_msg.send((GENERAL_CHAN_ID, return_list))
-                continue
                 print(f"Sent message: {len(return_list)} elements")
             dispatch_request = message[1]
         if p_audio.poll():
@@ -64,3 +64,8 @@ if __name__ == '__main__':
             print(f"Received audio request: \n{audio_transcript}")
             dispatch_request = 'This is a transcript of an audio request: \n' + audio_transcript
             p_raw_msg.send((GENERAL_CHAN_ID, "```\n" + dispatch_request + "\n```"))
+
+        #TODO: START HERE- send to List Parser
+        if dispatch_request:
+            parsed_list = parse_list(dispatch_request)
+            p_raw_msg.send((GENERAL_CHAN_ID, "```\n" + parsed_list + "\n```"))

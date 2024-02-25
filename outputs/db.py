@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, JSON, Text
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, JSON, Text, DateTime
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON  # Import specific JSON type for SQLite
 
@@ -10,23 +10,23 @@ class List(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String)
     location = Column(String)
-    sources = Column(Integer, ForeignKey('lists.id'))
+    sources = Column(SQLiteJSON)
     elements = Column(SQLiteJSON)
-    source_list = relationship('List', remote_side=[id], backref='referenced_lists')
 
 class Chore(Base):
     __tablename__ = 'chores'
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    frequency = Column(String)
+    description = Column(Text)
+    due_date = Column(DateTime)
+    repeat_after = Column(Integer)  # Seconds
+    labels = Column(SQLiteJSON)
+    project_id = Column(Integer)
     time = Column(Integer)
     list_id = Column(Integer, ForeignKey('lists.id'))
     parent_chore_id = Column(Integer, ForeignKey('chores.id'))
-    # Use JSON to store children chores' IDs
-    children_chores = Column(SQLiteJSON)
-    list = relationship('List', backref='chores')
-    parent_chore = relationship('Chore', remote_side=[id], back_populates='child_chores')
-    child_chores = relationship('Chore', back_populates='parent_chore')
+    lists = Column(SQLiteJSON)
+    child_chores = Column(SQLiteJSON)
 
 class DB:
     def __init__(self, db_uri):

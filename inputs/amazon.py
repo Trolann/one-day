@@ -28,7 +28,13 @@ def wait_on_run(run, thread):
         sleep(0.5)
     return run
 
-def parse_amazon_text(text):
+def parse_amazon_text(text, orderid: str):
+    if 'prime student fee' in text.lower():
+        return {
+            'orderID': orderid,
+            'amount': 8.17,
+            'items': 'Prime Student Fee'
+        }
     thread = client.beta.threads.create()
     assistant = client.beta.assistants.retrieve(AMAZON_ASSISTANT_ID)
 
@@ -39,6 +45,8 @@ def parse_amazon_text(text):
     run = wait_on_run(run, thread)
 
     run_results = loads(run.model_dump_json())
+
+    # TODO: Ensure only 1 entry per orderid
     result_dict = loads(run_results['required_action']['submit_tool_outputs']['tool_calls'][0]['function']['arguments'])
 
     # TODO: replace with a database
@@ -61,6 +69,17 @@ def login(headless=False):
     sleep(2)  # Wait for page load
     driver.find_element(By.ID, "ap_password").send_keys(AMAZON_PASSWORD)
     driver.find_element(By.ID, "signInSubmit").click()
+
+    try:
+        # See if the text is on the screen
+        driver.find_element(By.NAME, "cvf_captcha_input")
+        driver.save_screenshot('captcha.png')
+        captcha = input("Please solve the captcha and press enter to continue:\n")
+        driver.find_element(By.NAME, "cvf_captcha_input").send_keys(captcha)
+        driver.find_element(By.NAME, "cvf_captcha_captcha_action").click()
+    except:
+        pass
+
 
     # Delete cookie from disk
     try:
@@ -92,7 +111,9 @@ def get_trans_list(headless=False):
 
     parse_driver.get(trans_url)
     total_height = parse_driver.execute_script("return document.body.parentNode.scrollHeight")
-    parse_driver.set_window_size(225, total_height - (580 * 2))
+    window_height = total_height - (580 * 2)
+    window_height = window_height if window_height > 0 else total_height
+    parse_driver.set_window_size(225, window_height)
 
     image_strings = []
     pages = 0
@@ -128,8 +149,8 @@ def get_trans_list(headless=False):
     matches = find_matching_substrings(image_strings)
     print(matches)
     # delete the screenshots
-    for page in range(1, pages + 1):
-        remove(f'page_{page}.png')
+    #for page in range(1, pages + 1):
+    #    remove(f'page_{page}.png')
 
     return matches
 
@@ -151,10 +172,10 @@ def find_matching_substrings(strings):
 
 
 def parse_trans(trans):
+    digital_order = False
     if trans.startswith('D'):
         trans_url = f'https://www.amazon.com/gp/css/order-details?orderID={trans}'
-        print(f'Skipping digital item {trans}')
-        return
+        digital_order = True
     else:
         trans_url = f'https://www.amazon.com/gp/css/summary/edit.html?orderID={trans}'
 
@@ -175,7 +196,7 @@ def parse_trans(trans):
     small_soup = soup.get_text()[start_idx:end_idx]
     clean_soup = '\n'.join([line for line in small_soup.split('\n') if line.strip() != ''])
     if 'Something went wrong, please sign-in' not in clean_soup:
-        parse_amazon_text(clean_soup)
+        parse_amazon_text(clean_soup, trans)
     else:
         print('Something went wrong, please sign-in')
 
@@ -183,21 +204,26 @@ def load_prior_results():
     # {'orderID': '111-8079947-6269031', 'amount': 81.83, 'items': 'Computer Monitor'}
     # Iterate line by line. We need to returna a list of strings containing orderID only
     return_list = []
-    with open('amazon.json', 'r') as f:
-        for i, line in enumerate(f):
-            # i used for debug counter
-            try:
-                return_list.append(eval(line)['orderID'])
-            except Exception as e:
-                print(f'Error: {e}')
-                print(f'Line: {line}')
-                continue
+    try:
+        with open('amazon.json', 'r') as f:
+            for i, line in enumerate(f):
+                # i used for debug counter
+                try:
+                    return_list.append(eval(line)['orderID'])
+                except Exception as e:
+                    print(f'Error: {e}')
+                    print(f'Line: {line}')
+                    continue
+    except FileNotFoundError:
+        # create the file
+        with open('amazon.json', 'w') as f:
+            pass
 
     return list(set(return_list))
 
 
 if __name__ == '__main__':
-    headless = True
+    headless = False
     login(headless=headless)
     old_trans_list = load_prior_results()
     new_trans_list = get_trans_list(headless=headless)
