@@ -139,18 +139,13 @@ class VikunjaAPI:
     def update_task(self, task_id, task_data):
         return post(f"{self.base_url}/tasks/{task_id}", json=task_data, headers=self.headers).json()
 
+    def get_label(self, label_id):
+        return get(f"{self.base_url}/labels/{label_id}", headers=self.headers).json()
+
 
 vikunja = VikunjaAPI()
 
 
 if __name__ == '__main__':
-    test_unknown_due_noon_today = [
-        {
-            'title': 'Test unknown due noon today',
-            'description': 'Test unknown due noon today',
-            'due_date': datetime.now(timezone.utc).isoformat()
-        }
-    ]
-    print(datetime.now(timezone.utc).isoformat())
-    for item in test_unknown_due_noon_today:
-        print(vikunja.add_unknown_item(**item))
+    for label in (vikunja.COSTCO_LABEL, vikunja.GROCERIES_LABEL, vikunja.TARGET_LABEL, vikunja.AMAZON_LABEL, vikunja.HOMEWORK_LABEL, vikunja.ADMIN_LABEL, vikunja.PROJECT_LABEL, vikunja.EXAM_LABEL):
+        print(label)
