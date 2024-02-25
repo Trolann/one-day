@@ -2,7 +2,7 @@ from time import sleep
 from openai import OpenAI
 from json import loads
 from settings import LIST_PARSER_ASSISTANT_ID, OPENAI_API_KEY
-from vikunja import vikunja
+from outputs.vikunja import vikunja
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
