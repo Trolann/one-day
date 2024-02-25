@@ -33,7 +33,7 @@ def parse_list(text):
 
     run_results = loads(run.model_dump_json())
 
-    tool_calls = loads(run.required_action.submit_tool_outputs.tool_calls)
+    tool_calls = run.required_action.submit_tool_outputs.tool_calls
     labels = []
     for list in tool_calls:
         function_name = list['function']
