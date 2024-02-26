@@ -31,34 +31,44 @@ def parse_list(text):
 
     run = wait_on_run(run, thread)
 
-    run_results = loads(run.model_dump_json())
-
     tool_calls = run.required_action.submit_tool_outputs.tool_calls
+    title = ''
+    description = ''
     labels = []
-    for list in tool_calls:
-        function_name = list['function']
-        try:
-            title = list.arguments['title']
-        except:
-            title = 'Error'
-        try:
-            description = list.arguments['description']
-        except:
-            description = str(list)
-        try:
-            labels = list.arguments['labels']
-        except:
-            pass
-        # switch case on function name
-        match function_name:
-            # shopping, chores, meals, school_work, unknown
-            case "shopping":
-                return vikunja.add_shopping_item(title, labels, description)
-            case "chores":
-                return vikunja.add_chore(title, labels, description)
-            case "meals":
-                return vikunja.add_meal(title, labels, description)
-            case "school_work":
-                return vikunja.add_school_work(title, labels, description)
-            case "unknown":
-                return vikunja.add_unknown(title, labels, description)
+    return_vals = []
+    for call in tool_calls:
+        function_name = call.function.name
+        for item in eval(call.function.arguments)['tasks']:
+            title = item.get('title', 'No title')
+            description = item.get('description', str(item))
+            labels = item.get('labels', [])
+            # switch case on function name
+            match function_name:
+                # shopping, chores, meals, school_work, unknown
+                case "shopping":
+                    return_vals.append(vikunja.add_shopping_item(title, labels, description))
+                case "chores":
+                    return_vals.append(vikunja.add_chore(title, labels, description))
+                case "meals":
+                    return_vals.append(vikunja.add_meal(title, labels, description))
+                case "school_work":
+                    return_vals.append(vikunja.add_school_work(title, labels, description))
+                case "unknown":
+                    return_vals.append(vikunja.add_unknown_item(title, labels, description))
+    return f'Added {len(return_vals)} items to Vikunja'
+
+if __name__ == '__main__':
+    test_text = """
+Image transcript: 
+- Costco
+  - Baby Wipes
+  - Goldfish Bags
+  - Quinoa Salad
+  - TP (Toilet Paper)
+  - Paper Towels
+  - Beans
+  - RAOS
+  - AA, D, C Batt (Batteries)
+  - Broccoli/Veggies
+"""
+    print(parse_list(test_text))

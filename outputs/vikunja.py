@@ -70,13 +70,14 @@ class VikunjaAPI:
                    json=params,
                    headers=self.headers).json()
 
-    def add_schoolwork(self, title, labels: list, description=None, due_date=None):
+    def add_school_work(self, title, labels: list, description=None, due_date=None):
         """
         Add an item to the schoolwork list
         """
         label_list = []
         params = {"title": title}
 
+        # TODO: Labels aren't working right. They get sent here, but aren't being applied right.
         if 'homework' in labels:
             label_list.append(self.HOMEWORK_LABEL)
         if 'admin' in labels:

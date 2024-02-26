@@ -65,7 +65,6 @@ if __name__ == '__main__':
             dispatch_request = 'This is a transcript of an audio request: \n' + audio_transcript
             p_raw_msg.send((GENERAL_CHAN_ID, "```\n" + dispatch_request + "\n```"))
 
-        #TODO: START HERE- send to List Parser
         if dispatch_request:
             parsed_list = parse_list(dispatch_request)
             p_raw_msg.send((GENERAL_CHAN_ID, "```\n" + parsed_list + "\n```"))
