@@ -56,15 +56,13 @@ class VikunjaAPI:
                    json=params,
                    headers=self.headers).json()
 
-    def add_meals(self, title, description=None, due_date=None):
+    def add_meal(self, title, description=None, due_date=None):
         """
         Add an item to the meals list
         """
         params = {"title": title}
         if description:
             params['description'] = description
-        if due_date:
-            params['due_date'] = due_date
 
         return put(f"{self.base_url}/projects/{self.MEALS_LIST_ID}/tasks",
                    json=params,
