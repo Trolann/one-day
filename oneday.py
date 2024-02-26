@@ -22,6 +22,7 @@ if __name__ == '__main__':
 
 
     while True:
+        sleep(0.1)
         #message = input("Enter a message to send to Discord (q to quit): ")
         message = 'ping?'
         dispatch_request = ''
