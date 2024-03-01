@@ -27,11 +27,13 @@ def parse_list(text):
 
     run = client.beta.threads.runs.create(thread_id=thread.id,
                                           assistant_id=assistant.id,
-                                          instructions=text)
+                                          instructions=text + " ENSURE YOU REPLY WITH A TOOL CALL")
 
     run = wait_on_run(run, thread)
-
-    tool_calls = run.required_action.submit_tool_outputs.tool_calls
+    try:
+        tool_calls = run.required_action.submit_tool_outputs.tool_calls
+    except AttributeError:
+        return "Unable to get tools back from OpenAI."
     title = ''
     description = ''
     labels = []

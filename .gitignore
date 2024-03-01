@@ -9,3 +9,4 @@ __pycache__/
 *.pkl
 *.json
 dispatch/__pycache__/
+*.txt

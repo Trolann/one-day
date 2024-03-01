@@ -11,14 +11,14 @@ class VikunjaAPI:
         self.MEALS_LIST_ID = 29 #
         self.CHORES_LIST_ID = 28 #
         self.SHOPPING_LIST_ID = 27 #
-        self.COSTCO_LABEL = self.get_label(4)
-        self.GROCERIES_LABEL = self.get_label(5)
-        self.TARGET_LABEL = self.get_label(6)
-        self.AMAZON_LABEL = self.get_label(7)
-        self.HOMEWORK_LABEL = self.get_label(8)
-        self.ADMIN_LABEL = self.get_label(9)
-        self.PROJECT_LABEL = self.get_label(10)
-        self.EXAM_LABEL = self.get_label(11)
+        self.COSTCO_LABEL_ID = 4
+        self.GROCERIES_LABEL_ID = 5
+        self.TARGET_LABEL_ID = 6
+        self.AMAZON_LABEL_ID = 7
+        self.HOMEWORK_LABEL_ID = 8
+        self.ADMIN_LABEL_ID = 9
+        self.PROJECT_LABEL_ID = 10
+        self.EXAM_LABEL_ID = 11
 
     def add_unknown_item(self, title, labels = None, description=None, due_date=None):
         """
@@ -77,15 +77,15 @@ class VikunjaAPI:
 
         # TODO: Labels aren't working right. They get sent here, but aren't being applied right.
         if 'homework' in labels:
-            label_list.append(self.HOMEWORK_LABEL)
+            label_list.append(self.HOMEWORK_LABEL_ID)
         if 'admin' in labels:
-            label_list.append(self.ADMIN_LABEL)
+            label_list.append(self.ADMIN_LABEL_ID)
         if 'project' in labels:
-            label_list.append(self.PROJECT_LABEL)
+            label_list.append(self.PROJECT_LABEL_ID)
         if 'exam' in labels:
-            label_list.append(self.EXAM_LABEL)
-        if label_list:
-            params['labels'] = label_list
+            label_list.append(self.EXAM_LABEL_ID)
+        #if label_list:
+        #    params['labels'] = label_list
         if description:
             params['description'] = description
         if due_date:
@@ -97,10 +97,14 @@ class VikunjaAPI:
                 # Append whatever is the due date to the end of description
                 params['description'] = f"{description}\nDue (unable to parse): {due_date}"
 
-
-        return put(f"{self.base_url}/projects/{self.SCHOOLWORK_LIST_ID}/tasks",
+        response = put(f"{self.base_url}/projects/{self.SCHOOLWORK_LIST_ID}/tasks",
                    json=params,
                    headers=self.headers).json()
+
+        for label_id in label_list:
+            self.put_label(response['id'], label_id)
+
+        return self.get_task(response['id'])
 
     def add_shopping_item(self, title, labels: list, description = None, due_date=None):
         """
@@ -110,24 +114,31 @@ class VikunjaAPI:
         params = {"title": title}
 
         if 'amazon' in labels:
-            label_list.append(self.AMAZON_LABEL)
+            label_list.append(self.AMAZON_LABEL_ID)
         if 'costco' in labels:
-            label_list.append(self.COSTCO_LABEL)
+            label_list.append(self.COSTCO_LABEL_ID)
         if 'groceries' in labels:
-            label_list.append(self.GROCERIES_LABEL)
+            label_list.append(self.GROCERIES_LABEL_ID)
         if 'target' in labels:
-            label_list.append(self.TARGET_LABEL)
-        if label_list:
-            params['labels'] = label_list
+            label_list.append(self.TARGET_LABEL_ID)
+
+        #if label_list:
+        #    params['labels'] = label_list
+
+
         if description:
             params['description'] = description
         if due_date:
             params['due_date'] = due_date
 
-
-        return put(f"{self.base_url}/projects/{self.SHOPPING_LIST_ID}/tasks",
+        response = put(f"{self.base_url}/projects/{self.SHOPPING_LIST_ID}/tasks",
                    json=params,
                    headers=self.headers).json()
+
+        for label_id in label_list:
+            self.put_label(response['id'], label_id)
+
+        return self.get_task(response['id'])
 
     def get_tasks(self, project_id):
         return get(f"{self.base_url}/projects/{project_id}/tasks",
@@ -135,16 +146,35 @@ class VikunjaAPI:
                            "order_by": "desc"},
                    headers=self.headers).json()
 
+    def get_task(self, task_id):
+        return get(f"{self.base_url}/tasks/{task_id}", headers=self.headers).json()
+
     def update_task(self, task_id, task_data):
         return post(f"{self.base_url}/tasks/{task_id}", json=task_data, headers=self.headers).json()
 
     def get_label(self, label_id):
         return get(f"{self.base_url}/labels/{label_id}", headers=self.headers).json()
 
+    def put_label(self, task_id, label_id):
+        data = {
+            "label_id": label_id
+        }
+        return put(f"{self.base_url}/tasks/{task_id}/labels", json=data, headers=self.headers).json()
+
 
 vikunja = VikunjaAPI()
 
 
 if __name__ == '__main__':
-    for label in (vikunja.COSTCO_LABEL, vikunja.GROCERIES_LABEL, vikunja.TARGET_LABEL, vikunja.AMAZON_LABEL, vikunja.HOMEWORK_LABEL, vikunja.ADMIN_LABEL, vikunja.PROJECT_LABEL, vikunja.EXAM_LABEL):
-        print(label)
+    from pprint import pprint
+    test_shopping_with_costco_label = {
+        "title": "Test Shopping Item3",
+        "labels": [],
+        "label_id": [vikunja.COSTCO_LABEL['id']]
+    }
+    temp = test_shopping_with_costco_label
+    test_shopping_with_costco_label['description'] = str(temp)
+
+    print(vikunja.add_shopping_item(**test_shopping_with_costco_label))
+    #print(vikunja.put_label(uid, vikunja.GROCERIES_LABEL['id']))
+    pass
