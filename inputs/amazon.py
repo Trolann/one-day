@@ -1,304 +1,213 @@
+#amazon.py
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from pickle import dump, load
 from time import sleep
-from os import remove, listdir, path
 from bs4 import BeautifulSoup
-from multiprocessing import Pool
-from openai import OpenAI
-from settings import OPENAI_API_KEY, amazon_user_prompt
-from json import loads
-from settings import AMAZON_LOGIN, AMAZON_PASSWORD, AMAZON_ASSISTANT_ID
-
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-def get_response(thread):
-    return client.beta.threads.messages.list(thread_id=thread.id, order="asc")
-
-def show_json(obj):
-    print(loads(obj.model_dump_json()))
-
-def wait_on_run(run, thread):
-    while run.status == "queued" or run.status == "in_progress":
-        run = client.beta.threads.runs.retrieve(
-            thread_id=thread.id,
-            run_id=run.id,
-        )
-        sleep(0.5)
-    return run
+from anthropic import Client
+from anthropic.types.beta.tools import ToolParam
+from settings import AMAZON_LOGIN, AMAZON_PASSWORD, OPUS, SONNET, HAIKU
+from datetime import datetime
 
 
-def parse_amazon_text(text: str, orderid: str) -> dict | None:
-    if 'prime student fee' in text.lower():
-        return {
-            'orderID': orderid,
-            'amount': 8.17,
-            'items': 'Prime Student Fee'
+class AmazonTransactionFinder:
+    def __init__(self, headless=True):
+        self.client = Client()
+        self.MODEL = HAIKU
+        self.driver = self.initialize_driver(headless)
+        transaction_map = {
+            "name": "transaction_map",
+            "description": "Map details of a transaction to add to bank ledger memo line",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "orderID": {
+                        "type": "string",
+                        "description": "Unique identifier for the transaction (copy paste from the given text)"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "The transaction amount (copy paste from the given text)"
+                    },
+                    "items": {
+                        "type": "string",
+                        "description": "A very concise description of the entire order represented by the transcation."
+                                       "No more than 10-12 words, no deep descriptions of the items."
+                                       "Examples: 'Kitchen Shears, 2x T-Shirts', 'Valentines Day cards and decorations'"
+                                       ", 'Goodnight Moon book, baby onesies and stacking blocks.'"
+                    },
+                    "transaction_date": {
+                        "type": "string",
+                        "description": "The date and time when the transaction was made. In the format 'Month DD, YYYY'"
+                                       "and will be extracted by "
+                                       "`datetime.strptime(transaction['transaction_date'], '%B %d, %Y')`"
+                    }
+                },
+                "required": ["orderID", "amount", "items", "transaction_date"]
+            }
         }
-    thread = client.beta.threads.create()
-    assistant = client.beta.assistants.retrieve(AMAZON_ASSISTANT_ID)
-    print(f'Starting run for orderID: {orderid}')
-    run = client.beta.threads.runs.create(thread_id=thread.id,
-                                          assistant_id=assistant.id,
-                                          instructions=text + '\n' + amazon_user_prompt)
+        self.tools = [ToolParam(**transaction_map)]
+        self.login()
 
-    run = wait_on_run(run, thread)
+    def initialize_driver(self, headless):
+        chrome_options = Options()
+        if headless:
+            chrome_options.add_argument("--headless")
+        driver = webdriver.Chrome(options=chrome_options)
+        return driver
 
-    run_results = loads(run.model_dump_json())
+    def login(self):
+        self.driver.get("https://www.amazon.com/gp/sign-in.html")
+        self.driver.find_element(By.ID, "ap_email").send_keys(AMAZON_LOGIN)
+        self.driver.find_element(By.ID, "continue").click()
+        sleep(2)
+        self.driver.find_element(By.ID, "ap_password").send_keys(AMAZON_PASSWORD)
+        self.driver.find_element(By.ID, "signInSubmit").click()
 
-    print(f'Got run for orderID: {orderid}')
-    try:
-        # TODO: Ensure only 1 entry per orderid
-        result_dict = loads(run_results['required_action']['submit_tool_outputs']['tool_calls'][0]['function']['arguments'])
-    except TypeError:
-        print(f'Error parsing run for orderID: {orderid}')
         try:
-            with('error.txt', 'a') as f:
-                f.write(f'Error parsing run for orderID: {orderid}')
-        except FileNotFoundError:
-            with('error.txt', 'w') as f:
-                f.write(f'Error parsing run for orderID: {orderid}')
-        return None
-    print(f'Writing results for orderID: {orderid}')
-    # TODO: replace with a database
-    with open('amazon.json', 'a') as f:
-        f.write(str(result_dict))
-        f.write('\n')
-
-    return result_dict
-
-def login(headless=False):
-    chrome_options = Options()
-    if headless:
-        chrome_options.add_argument("--headless")
-
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.get("https://www.amazon.com/gp/sign-in.html")
-    # Step 2: Automate login (Replace 'your_email' and 'your_password' with your Amazon credentials)
-    driver.find_element(By.ID, "ap_email").send_keys(AMAZON_LOGIN)
-    driver.find_element(By.ID, "continue").click()
-    sleep(2)  # Wait for page load
-    driver.find_element(By.ID, "ap_password").send_keys(AMAZON_PASSWORD)
-    driver.find_element(By.ID, "signInSubmit").click()
-
-    try:
-        # See if the text is on the screen
-        driver.find_element(By.NAME, "cvf_captcha_input")
-        driver.save_screenshot('captcha.png')
-        captcha = input("Please solve the captcha and press enter to continue:\n")
-        driver.find_element(By.NAME, "cvf_captcha_input").send_keys(captcha)
-        driver.find_element(By.NAME, "cvf_captcha_captcha_action").click()
-    except:
-        pass
-
-
-    # Delete cookie from disk
-    try:
-        remove("amazon_cookies.pkl")
-    except FileNotFoundError:
-        pass
-
-    # Step 3: Save cookies for later use
-    dump(driver.get_cookies(), open("amazon_cookies.pkl", "wb"))
-    driver.quit()
-
-
-def worker_init():
-    # This function will be called by each worker process once
-    global cookies
-    cookies = load(open("amazon_cookies.pkl", "rb"))
-
-
-def get_trans_list(headless=False):
-    trans_url = "https://www.amazon.com/cpe/yourpayments/transactions"
-    chrome_options = Options()
-    if headless:
-        chrome_options.add_argument("--headless")
-    parse_driver = webdriver.Chrome(options=chrome_options)
-    parse_driver.get('https://www.amazon.com')
-    _cookies = load(open("amazon_cookies.pkl", "rb"))
-    for cookie in _cookies:
-        parse_driver.add_cookie(cookie)
-
-    parse_driver.get(trans_url)
-    total_height = parse_driver.execute_script("return document.body.parentNode.scrollHeight")
-    window_height = total_height - (580 * 2)
-    window_height = window_height if window_height > 0 else total_height
-    parse_driver.set_window_size(225, window_height)
-
-    image_strings = []
-    pages = 0
-    for page in range(1, 3):
-        sleep(5)
-        print(f'Parsing page {page}')
-        # Save a screenshot (for debugging)
-        parse_driver.execute_script("window.scrollTo(0, 0);")
-        parse_driver.save_screenshot(f'page_{page}.png')
-        print(f'Saved screenshot of page {page}')
-        pages = page
-        #image = Image.open(f'page_{page}.png')
-        #image = image.crop((25, 330, 300, total_height - (580 * 2)))
-        #image_strings.append(image_to_string(image))
-
-        trans_list_soup = BeautifulSoup(parse_driver.page_source, 'html.parser')
-        image_strings.append(trans_list_soup.get_text())
-
-        # click "Next Page" button
-        try:
-            find_value = "//input[contains(@name, 'DefaultNextPageNavigationEvent')]"
-            next_page_button = parse_driver.find_element(By.XPATH, find_value)
-            next_page_button.click()
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
-
-    parse_driver.quit()
-    # Extract every unique string which is:
-    # 113-1173472-3274645
-    # that is 3 characters, a hyphen, 7 characters, a hyphen, and 7 characters
-    print('Getting matches')
-    matches = find_matching_substrings(image_strings)
-    print(matches)
-    # delete the screenshots
-    #for page in range(1, pages + 1):
-    #    remove(f'page_{page}.png')
-
-    return matches
-
-def find_matching_substrings(strings):
-    # Define the pattern for 3 characters, a hyphen, 7 characters, a hyphen, and 3 characters
-    all_matches = set()
-
-    for i, string in enumerate(strings):
-        print(f'Parsing string {i} of {len(strings)}')
-        start_idx = 0
-        while string.find('Order #', start_idx) != -1:
-            start_idx = string.find('Order #', start_idx) + 7
-            stripped_match = string[start_idx:start_idx+19].strip()
-            stripped_match = stripped_match.strip('\n')
-            all_matches.add(stripped_match)
-            start_idx += 20
-
-    return list(all_matches)
-
-
-def parse_trans(transaction_id: str) -> None:
-    if transaction_id.startswith('D'):
-        trans_url = f'https://www.amazon.com/gp/css/order-details?orderID={transaction_id}'
-    else:
-        trans_url = f'https://www.amazon.com/gp/css/summary/edit.html?orderID={transaction_id}'
-
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    parse_driver = webdriver.Chrome(options=chrome_options)
-
-    parse_driver.get('https://www.amazon.com')
-    for cookie in cookies:
-        parse_driver.add_cookie(cookie)
-
-    parse_driver.get(trans_url)
-    sleep(2)
-    soup = BeautifulSoup(parse_driver.page_source, 'html.parser')
-    parse_driver.quit()
-    start_idx = soup.get_text().find("Ordered on ") + 11
-    end_idx = soup.get_text().find('Buy it again')
-    small_soup = soup.get_text()[start_idx:end_idx]
-    clean_soup = '\n'.join([line for line in small_soup.split('\n') if line.strip() != ''])
-    # write the clean_soup to a file for debugging
-    with open(f'clean_soup/{transaction_id}.txt', 'w') as f:
-        f.write(clean_soup)
-
-    if 'Something went wrong, please sign-in' not in clean_soup:
-        #parse_amazon_text(clean_soup, transaction_id)
-        pass
-    else:
-        print('Something went wrong, please sign-in')
-
-def load_prior_results(id_only=True):
-    # {'orderID': '111-8079947-6269031', 'amount': 81.83, 'items': 'Computer Monitor'}
-    # Iterate line by line. We need to returna a list of strings containing orderID only
-    return_list = []
-    try:
-        with open('amazon.json', 'r') as f:
-            for i, line in enumerate(f):
-                # i used for debug counter
-                try:
-                    line_dict = eval(line)
-                    return_list.append(line_dict)
-                except Exception as e:
-                    print(f'Error: {e}')
-                    print(f'Line: {line}')
-                    continue
-    except FileNotFoundError:
-        # create the file
-        with open('amazon.json', 'w') as f:
+            self.driver.find_element(By.NAME, "cvf_captcha_input")
+            self.driver.save_screenshot('captcha.png')
+            captcha = input("Please solve the captcha and press enter to continue:\n")
+            self.driver.find_element(By.NAME, "cvf_captcha_input").send_keys(captcha)
+            self.driver.find_element(By.NAME, "cvf_captcha_captcha_action").click()
+        except:
             pass
 
-    if id_only:
-        try:
-            return [set(item['orderID'] for item in return_list)]
-        except:
-            return []
+    def find_transaction(self, amount, date, page_depth=5):
+        trans_url = "https://www.amazon.com/cpe/yourpayments/transactions"
+        self.driver.get(trans_url)
+        total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
+        window_height = total_height - (580 * 2)
+        window_height = window_height if window_height > 0 else total_height
+        self.driver.set_window_size(225, window_height)
 
-    return return_list
+        closest_transaction = None
+        closest_date_diff = float('inf')
 
+        for p in range(page_depth):
+            sleep(5)
+            self.driver.execute_script("window.scrollTo(0, 0);")
 
-def load_text_file(filename: str) -> str:
-    with open(filename, 'r', encoding='utf-8') as file:
-        return file.read()
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            transaction_text = soup.get_text()
+            order_ids = self.find_order_ids_by_amount(soup, amount)
 
+            for order_id in order_ids:
+                transaction = self.get_transaction_details(order_id)
+                if transaction:
+                    try:
+                        trans_date = datetime.strptime(transaction['transaction_date'], '%B %d, %Y')
+                    except ValueError:
+                        # try YYYY-MM-DD format
+                        try:
+                            trans_date = datetime.strptime(transaction['transaction_date'], '%Y-%m-%d')
+                        except ValueError:
+                            # transaction was today
+                            trans_date = datetime.now()
+                    date_diff = abs((date - trans_date).days)
+                    if date_diff < closest_date_diff:
+                        closest_transaction = transaction
+                        closest_date_diff = date_diff
 
-def process_file(item):
-    filename, text = item
-    return parse_amazon_text(text, filename)
+            try:
+                find_value = "//input[contains(@name, 'DefaultNextPageNavigationEvent')]"
+                next_page_button = self.driver.find_element(By.XPATH, find_value)
+                next_page_button.click()
+            except Exception as e:
+                #print(f"Error: {e}")
+                break
+
+        return closest_transaction
+
+    def find_order_ids_by_amount(self, soup, target_amount):
+        order_ids = []
+        spans = soup.find_all('span', class_='a-size-base-plus')
+        for span in spans:
+            if span.parent.name == 'div' and span.parent.get('class') == ['a-column', 'a-span3', 'a-text-right',
+                                                                          'a-span-last']:
+                amount_str = span.text.replace('$', '').replace(',', '')
+                if amount_str.startswith('-'):
+                    amount_str = amount_str[1:]
+                if float(amount_str) == abs(target_amount):
+                    link = span.parent.parent.find_next_sibling('div').find('a')
+                    if link:
+                        order_id = link['href'].split('orderID=')[1]
+                        order_ids.append(order_id)
+        return order_ids
+
+    def get_transaction_details(self, order_id):
+        if order_id.startswith('D'):
+            trans_url = f'https://www.amazon.com/gp/css/order-details?orderID={order_id}'
+        else:
+            trans_url = f'https://www.amazon.com/gp/css/summary/edit.html?orderID={order_id}'
+
+        self.driver.get(trans_url)
+        sleep(2)
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+
+        start_idx = soup.get_text().find("Ordered on ") + 11
+        end_idx = soup.get_text().find('Buy it again')
+        #transaction_text = soup.get_text()[start_idx:end_idx]
+        transaction_text = soup.get_text()[start_idx:]
+        clean_text = '\n'.join([line for line in transaction_text.split('\n') if line.strip() != ''])
+
+        if 'Something went wrong, please sign-in' not in clean_text:
+            return self.parse_transaction_text(clean_text, order_id)
+        else:
+            print('Something went wrong, please sign-in')
+            return None
+
+    def parse_transaction_text(self, text, order_id):
+        messages = [{"role": "user", "content": f"Request:\n{text}"}]
+        print('Calling Claude')
+        response = self.client.beta.tools.messages.create(
+            model=self.MODEL,
+            max_tokens=4096,
+            tools=self.tools,
+            messages=messages
+        )
+
+        retries_left = 3 if response.stop_reason != "tool_use" else 0
+        while retries_left:
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "user", "content": "This is incorrect, respond with a tool call. "
+                                                        "Please provide a tool call"})
+            retries_left -= 1
+            response = self.client.beta.tools.messages.create(
+                model=self.MODEL,
+                max_tokens=4096,
+                tools=self.tools,
+                messages=[
+                    {"role": "system", "content": "Please provide a tool call"}
+                ]
+            )
+
+        for tool_call in [block for block in response.content if block.type == "tool_use"]:
+            function_name = tool_call.name
+            item = tool_call.input
+            if type(tool_call.input) is not dict:
+                try:
+                    item = eval(str(tool_call.input))
+                except Exception as e:
+                    print(f'Error: {e}')
+                    print(f'Line: {tool_call.input}')
+                    continue
+            item['orderID'] = order_id
+            return item
+
+        return None
+
 
 if __name__ == '__main__':
-    GET_AMAZON_TRANSACTIONS = False
-    if GET_AMAZON_TRANSACTIONS:
-        headless = True
-        login(headless=headless)
-        old_trans_list = load_prior_results()
-        new_trans_list = get_trans_list(headless=headless)
+    hd = True
+    finder = AmazonTransactionFinder(headless=hd)
 
-        # Remove any old transactions from the new list
-        for trans in old_trans_list:
-            if trans in new_trans_list:
-                new_trans_list.remove(trans)
+    # Example usage
+    amount = 25.22
+    date = datetime(2024, 3, 18)
+    result = finder.find_transaction(amount, date, page_depth=5)
 
-        pool = Pool(initializer=worker_init)
-
-        # Map trans_list to parse_trans function across the pool
-        pool.map(parse_trans, new_trans_list)
-
-        pool.close()
-        pool.join()
+    if result:
+        print(f"Transaction found: {result}")
     else:
-        directory_path = 'clean_soup'
-        clean_soup_text = {}
-        old_orders = load_prior_results(id_only=True)
-
-        # Load files into dictionary
-        for file in listdir(directory_path):
-            order_id = file[:-4]
-            new_order = order_id not in old_orders
-            if file.endswith('.txt') and new_order:
-                print(f'Loading file {file}')
-                file_path = path.join(directory_path, file)
-                clean_soup_text[order_id] = load_text_file(file_path)
-            elif not file.endswith('.txt'):
-                print(f'File {file} is not a .txt file')
-            elif not new_order:
-                print(f'Order {order_id} is already in the database')
-            else:
-                print(f'Unknown issue for file {file}')
-
-        # Create a list of tuples for processing
-        items_to_process = list(clean_soup_text.items())
-        print(f'Got {len(items_to_process)} items to process')
-        # Use multiprocessing to process files
-        with Pool() as pool:
-            print(f'Starting pool')
-            results = pool.map(process_file, items_to_process)
-
-        print(results)  # This will be a list of dictionary objects or None
+        print("Transaction not found")

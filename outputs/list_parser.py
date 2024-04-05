@@ -1,65 +1,68 @@
-from time import sleep
-from openai import OpenAI
-from json import loads
-from settings import LIST_PARSER_ASSISTANT_ID, OPENAI_API_KEY
+#list_parser.py
+from anthropic import Client
 from outputs.vikunja import vikunja
+from outputs.list_tools import list_tools
+from datetime import datetime
+from settings import OPUS, SONNET, HAIKU
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-def get_response(thread):
-    return client.beta.threads.messages.list(thread_id=thread.id, order="asc")
-
-def show_json(obj):
-    print(loads(obj.model_dump_json()))
-
-def wait_on_run(run, thread):
-    while run.status == "queued" or run.status == "in_progress":
-        run = client.beta.threads.runs.retrieve(
-            thread_id=thread.id,
-            run_id=run.id,
-        )
-        sleep(0.5)
-    return run
+client = Client()
 
 def parse_list(text):
-    thread = client.beta.threads.create()
-    assistant = client.beta.assistants.retrieve(LIST_PARSER_ASSISTANT_ID)
+    messages = [{"role": "user", "content": f"Today's date is: {datetime.now().isoformat()}\nRequest:\n{text}"}]
+    print('Calling Claude')
+    response = client.beta.tools.messages.create(
+        model=SONNET,
+        max_tokens=4096,
+        tools=list_tools,
+        messages=messages
+    )
 
-    run = client.beta.threads.runs.create(thread_id=thread.id,
-                                          assistant_id=assistant.id,
-                                          instructions=text + " ENSURE YOU REPLY WITH A TOOL CALL")
+    retries_left = 3 if response.stop_reason != "tool_use" else 0
+    while retries_left:
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": "This is incorrect, respond with a tool call. "
+                                                    "Please provide a tool call"})
+        retries_left -= 1
+        response = client.beta.tools.messages.create(
+            model=SONNET,
+            max_tokens=4096,
+            tools=list_tools,
+            messages=[
+                {"role": "system", "content": "Please provide a tool call"}
+            ]
+        )
 
-    run = wait_on_run(run, thread)
-    try:
-        tool_calls = run.required_action.submit_tool_outputs.tool_calls
-    except AttributeError:
-        return "Unable to get tools back from OpenAI."
-    title = ''
-    description = ''
-    labels = []
     return_vals = []
-    for call in tool_calls:
-        function_name = call.function.name
-        for item in eval(call.function.arguments)['tasks']:
-            title = item.get('title', 'No title')
-            description = item.get('description', str(item))
-            labels = item.get('labels', [])
-            # switch case on function name
-            match function_name:
-                # shopping, chores, meals, school_work, unknown
-                case "shopping":
-                    return_vals.append(vikunja.add_shopping_item(title, labels, description))
-                case "chores":
-                    return_vals.append(vikunja.add_chore(title, labels, description))
-                case "meals":
-                    return_vals.append(vikunja.add_meal(title, labels, description))
-                case "school_work":
-                    return_vals.append(vikunja.add_school_work(title, labels, description))
-                case "unknown":
-                    return_vals.append(vikunja.add_unknown_item(title, labels, description))
+    for tool_call in [block for block in response.content if block.type == "tool_use"]:
+        #tool_call = next(block for block in response.content if block.type == "tool_use")
+        function_name = tool_call.name
+        item = tool_call.input
+        if type(tool_call.input) is not dict:
+            try:
+                item = eval(str(tool_call.input))
+            except Exception as e:
+                print(f'Error: {e}')
+                print(f'Line: {tool_call.input}')
+                continue
+        title = item.get('title', 'No title')
+        description = item.get('description', str(item))
+        labels = item.get('labels', [])
+        match function_name:
+            case "shopping":
+                return_vals.append(vikunja.add_shopping_item(title, labels, description))
+            case "chores":
+                return_vals.append(vikunja.add_chore(title, labels, description))
+            case "meals":
+                return_vals.append(vikunja.add_meal(title, labels, description))
+            case "school_work":
+                return_vals.append(vikunja.add_school_work(title, labels, description))
+            case "unknown":
+                return_vals.append(vikunja.add_unknown_item(title, labels, description))
+
     return f'Added {len(return_vals)} items to Vikunja'
 
 if __name__ == '__main__':
+    print('Starting')
     test_text = """
 Image transcript: 
 - Costco

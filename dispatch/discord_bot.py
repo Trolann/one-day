@@ -132,4 +132,5 @@ def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, imag
     asyncio.run(bot.start(DISCORD_API_KEY))
 
 if __name__ == '__main__':
+    print('Starting the asyncio loop')
     asyncio.run(run_bot())

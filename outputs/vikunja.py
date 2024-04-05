@@ -1,176 +1,167 @@
 from settings import VIKUNJA_API_KEY, VIKUNJA_API_URL
 from requests import get, post, put, delete
-from datetime import datetime, timezone
+from requests.exceptions import ConnectionError, HTTPError
+from datetime import datetime
+from time import sleep
 
 class VikunjaAPI:
-    def __init__(self):
+    def __init__(self, max_retries=10, retry_delay=1):
         self.base_url = VIKUNJA_API_URL
         self.headers = {"Authorization": f"Bearer {VIKUNJA_API_KEY}"}
-        self.SCHOOLWORK_LIST_ID = 31 #
-        self.UNKNOWN_LIST_ID = 30
-        self.MEALS_LIST_ID = 29 #
-        self.CHORES_LIST_ID = 28 #
-        self.SHOPPING_LIST_ID = 27 #
-        self.COSTCO_LABEL_ID = 4
-        self.GROCERIES_LABEL_ID = 5
-        self.TARGET_LABEL_ID = 6
-        self.AMAZON_LABEL_ID = 7
-        self.HOMEWORK_LABEL_ID = 8
-        self.ADMIN_LABEL_ID = 9
-        self.PROJECT_LABEL_ID = 10
-        self.EXAM_LABEL_ID = 11
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
 
-    def add_unknown_item(self, title, labels = None, description=None, due_date=None):
-        """
-        Add an item to the unknown list
-        """
+        self.SCHOOLWORK_LIST_ID = 31
+        self.UNKNOWN_LIST_ID = 30
+        self.MEALS_LIST_ID = 29
+        self.CHORES_LIST_ID = 28
+        self.SHOPPING_LIST_ID = 27
+
+        self.LABELS = {
+            'COSTCO': 4,
+            'GROCERIES': 5,
+            'TARGET': 6,
+            'AMAZON': 7,
+            'HOMEWORK': 8,
+            'ADMIN': 9,
+            'PROJECT': 10,
+            'EXAM': 11
+        }
+
+    def _make_request(self, method, url, **kwargs):
+        for retry in range(self.max_retries):
+            try:
+                if True: # Set to False to disable debug output and actually call Vikunja
+                    url = url[len(self.base_url):]
+                    url_parts = url.split('/')
+                    if url_parts[1] == 'projects':
+                        try:
+                            url_parts[2] = int(url_parts[2])
+                        except:
+                            pass
+                        match url_parts[2]:
+                            case self.UNKNOWN_LIST_ID:
+                                url_parts[2] = 'unknown'
+                            case self.CHORES_LIST_ID:
+                                url_parts[2] = 'chores'
+                            case self.MEALS_LIST_ID:
+                                url_parts[2] = 'meals'
+                            case self.SCHOOLWORK_LIST_ID:
+                                url_parts[2] = 'school_work'
+                            case self.SHOPPING_LIST_ID:
+                                url_parts[2] = 'shopping'
+                    url = '/'.join(url_parts)
+                    print(f"Debug: {url}\n{kwargs['json'] if 'json' in kwargs else kwargs}")
+                    return None
+                response = method(url, **kwargs)
+                response.raise_for_status()
+                return response.json()
+            except (ConnectionError, HTTPError) as e:
+                if retry < self.max_retries - 1:
+                    sleep(self.retry_delay)
+                else:
+                    raise e
+
+    def add_unknown_item(self, title, labels=None, description=None, due_date=None):
         params = {"title": title}
         if description:
             if labels:
-                try:
-                    # Description with labels written on bottom
-                    params['description'] = f"{description}\nLabels: {', '.join(labels)}"
-                except TypeError:
-                    # If labels is not a list
-                    params['description'] = f"{description}\nLabels: {labels}"
+                params['description'] = f"{description}\nLabels: {', '.join(labels)}"
             else:
                 params['description'] = description
         if due_date:
             params['due_date'] = due_date
 
-        return put(f"{self.base_url}/projects/{self.UNKNOWN_LIST_ID}/tasks",
-                   json=params,
-                   headers=self.headers).json()
+        return self._make_request(put, f"{self.base_url}/projects/{self.UNKNOWN_LIST_ID}/tasks", json=params, headers=self.headers)
 
     def add_chore(self, title, description=None, due_date=None):
-        """
-        Add an item to the chores list
-        """
         params = {"title": title}
         if description:
             params['description'] = description
         if due_date:
             params['due_date'] = due_date
 
-        return put(f"{self.base_url}/projects/{self.CHORES_LIST_ID}/tasks",
-                   json=params,
-                   headers=self.headers).json()
+        return self._make_request(put, f"{self.base_url}/projects/{self.CHORES_LIST_ID}/tasks", json=params, headers=self.headers)
 
     def add_meal(self, title, description=None, due_date=None):
-        """
-        Add an item to the meals list
-        """
         params = {"title": title}
         if description:
             params['description'] = description
 
-        return put(f"{self.base_url}/projects/{self.MEALS_LIST_ID}/tasks",
-                   json=params,
-                   headers=self.headers).json()
+        return self._make_request(put, f"{self.base_url}/projects/{self.MEALS_LIST_ID}/tasks", json=params, headers=self.headers)
 
-    def add_school_work(self, title, labels: list, description=None, due_date=None):
-        """
-        Add an item to the schoolwork list
-        """
-        label_list = []
+    def add_school_work(self, title, labels, description=None, due_date=None):
+        label_ids = [self.LABELS[label.upper()] for label in labels if label.upper() in self.LABELS]
         params = {"title": title}
 
-        # TODO: Labels aren't working right. They get sent here, but aren't being applied right.
-        if 'homework' in labels:
-            label_list.append(self.HOMEWORK_LABEL_ID)
-        if 'admin' in labels:
-            label_list.append(self.ADMIN_LABEL_ID)
-        if 'project' in labels:
-            label_list.append(self.PROJECT_LABEL_ID)
-        if 'exam' in labels:
-            label_list.append(self.EXAM_LABEL_ID)
-        #if label_list:
-        #    params['labels'] = label_list
         if description:
             params['description'] = description
         if due_date:
             try:
-                # try and make iso time
                 due_date = datetime.fromisoformat(due_date)
                 params['due_date'] = due_date
             except ValueError:
-                # Append whatever is the due date to the end of description
                 params['description'] = f"{description}\nDue (unable to parse): {due_date}"
 
-        response = put(f"{self.base_url}/projects/{self.SCHOOLWORK_LIST_ID}/tasks",
-                   json=params,
-                   headers=self.headers).json()
+        return self._handle_request(label_ids, params)
 
-        for label_id in label_list:
-            self.put_label(response['id'], label_id)
-
-        return self.get_task(response['id'])
-
-    def add_shopping_item(self, title, labels: list, description = None, due_date=None):
-        """
-        Add an item to the shopping list
-        """
-        label_list = []
+    def add_shopping_item(self, title, labels, description=None, due_date=None):
+        label_ids = [self.LABELS[label.upper()] for label in labels if label.upper() in self.LABELS]
         params = {"title": title}
-
-        if 'amazon' in labels:
-            label_list.append(self.AMAZON_LABEL_ID)
-        if 'costco' in labels:
-            label_list.append(self.COSTCO_LABEL_ID)
-        if 'groceries' in labels:
-            label_list.append(self.GROCERIES_LABEL_ID)
-        if 'target' in labels:
-            label_list.append(self.TARGET_LABEL_ID)
-
-        #if label_list:
-        #    params['labels'] = label_list
-
 
         if description:
             params['description'] = description
         if due_date:
             params['due_date'] = due_date
 
-        response = put(f"{self.base_url}/projects/{self.SHOPPING_LIST_ID}/tasks",
-                   json=params,
-                   headers=self.headers).json()
+        return self._handle_request(label_ids, params)
 
-        for label_id in label_list:
-            self.put_label(response['id'], label_id)
-
-        return self.get_task(response['id'])
+    def _handle_request(self, label_ids, params):
+        response = self._make_request(put, f"{self.base_url}/projects/{self.SHOPPING_LIST_ID}/tasks", json=params,
+                                      headers=self.headers)
+        for label_id in label_ids:
+            try:
+                self.put_label(response['id'], label_id)
+            except TypeError as e:
+                if response:
+                    print(f"Error: {e}")
+                    print(f"Label ID: {label_id}")
+                    print(f"Response: {response}")
+                # Convert label_id to string for debugging
+                labels = []
+                for label in self.LABELS:
+                    if self.LABELS[label] == label_id:
+                        labels.append(label)
+                print(f'Labels: {labels}')
+                continue
+        return self.get_task(response['id']) if response else None
 
     def get_tasks(self, project_id):
-        return get(f"{self.base_url}/projects/{project_id}/tasks",
-                   params={"sort_by": "due_date",
-                           "order_by": "desc"},
-                   headers=self.headers).json()
+        return self._make_request(get, f"{self.base_url}/projects/{project_id}/tasks",
+                                  params={"sort_by": "due_date", "order_by": "desc"},
+                                  headers=self.headers)
 
     def get_task(self, task_id):
-        return get(f"{self.base_url}/tasks/{task_id}", headers=self.headers).json()
+        return self._make_request(get, f"{self.base_url}/tasks/{task_id}", headers=self.headers)
 
     def update_task(self, task_id, task_data):
-        return post(f"{self.base_url}/tasks/{task_id}", json=task_data, headers=self.headers).json()
+        return self._make_request(post, f"{self.base_url}/tasks/{task_id}", json=task_data, headers=self.headers)
 
     def get_label(self, label_id):
-        return get(f"{self.base_url}/labels/{label_id}", headers=self.headers).json()
+        return self._make_request(get, f"{self.base_url}/labels/{label_id}", headers=self.headers)
 
     def put_label(self, task_id, label_id):
-        data = {
-            "label_id": label_id
-        }
-        return put(f"{self.base_url}/tasks/{task_id}/labels", json=data, headers=self.headers).json()
+        data = {"label_id": label_id}
+        return self._make_request(put, f"{self.base_url}/tasks/{task_id}/labels", json=data, headers=self.headers)
 
 
 vikunja = VikunjaAPI()
 
-
 if __name__ == '__main__':
     from pprint import pprint
     test_shopping_with_costco_label = {
-        "title": "Test Shopping Item3",
-        "labels": [],
-        "label_id": [vikunja.COSTCO_LABEL['id']]
+        "title": "blah men",
+        "labels": ["amazon", "target"]
     }
     temp = test_shopping_with_costco_label
     test_shopping_with_costco_label['description'] = str(temp)
