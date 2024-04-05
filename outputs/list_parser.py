@@ -52,6 +52,8 @@ def parse_list(text):
                 return_vals.append(vikunja.add_shopping_item(title, labels, description))
             case "chores":
                 return_vals.append(vikunja.add_chore(title, labels, description))
+                # put label id 5 on the task
+                vikunja.put_label(return_vals[-1]['id'], vikunja.LABELS['CHORES'])
             case "meals":
                 return_vals.append(vikunja.add_meal(title, labels, description))
             case "school_work":

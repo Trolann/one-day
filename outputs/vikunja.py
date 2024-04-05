@@ -24,6 +24,7 @@ class VikunjaAPI:
             'AMAZON': 7,
             'HOMEWORK': 8,
             'ADMIN': 9,
+            'CHORES': 9,
             'PROJECT': 10,
             'EXAM': 11
         }
@@ -31,7 +32,7 @@ class VikunjaAPI:
     def _make_request(self, method, url, **kwargs):
         for retry in range(self.max_retries):
             try:
-                if True: # Set to False to disable debug output and actually call Vikunja
+                if False: # Set to False to disable debug output and actually call Vikunja
                     url = url[len(self.base_url):]
                     url_parts = url.split('/')
                     if url_parts[1] == 'projects':
@@ -77,9 +78,9 @@ class VikunjaAPI:
     def add_chore(self, title, description=None, due_date=None):
         params = {"title": title}
         if description:
-            params['description'] = description
-        if due_date:
-            params['due_date'] = due_date
+            params['description'] = description + '\n' + due_date
+        #if due_date:
+        #    params['due_date'] = due_date
 
         return self._make_request(put, f"{self.base_url}/projects/{self.CHORES_LIST_ID}/tasks", json=params, headers=self.headers)
 

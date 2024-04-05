@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+tomorrow = datetime.now() + timedelta(days=1)
+
 list_tools = [
    {
        "name": "shopping",
@@ -10,7 +13,7 @@ list_tools = [
            "properties": {
                "title": {
                    "type": "string",
-                   "description": "The name of the item to shop for."
+                   "description": "The name of the item to shop for such as '2x Onion' or 'Oat milk'."
                },
                "description": {
                    "type": "string",
@@ -18,7 +21,8 @@ list_tools = [
                },
                "due_date": {
                    "type": "string",
-                   "description": "When it must be purchased by."
+                   # use tomorrow's date as the default
+                   "description": f"When it must be purchased by. If unknown, use {tomorrow}"
                },
                "labels": {
                    "type": "array",
@@ -31,10 +35,11 @@ list_tools = [
                            "target"
                        ]
                    },
-                   "description": "Where the item should be purchased from. If unknown, omit"
+                   "description": "Where the item should be purchased from. "
+                                  "If unknown, amazon or groceries are good defaults."
                }
            },
-           "required": ["title"]
+           "required": ["title", "labels", "due_date"]
        }
    },
    {
