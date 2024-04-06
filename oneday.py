@@ -46,20 +46,7 @@ if __name__ == '__main__':
             if p_raw_msg.poll():
                 message = p_raw_msg.recv()
                 print(f"Received message: {message}")
-                if 'amazon' in message[1]:
-                    return_list = []
-                    with open('amazon.json', 'r') as f:
-                        for i, line in enumerate(f):
-                            # i used for debug counter
-                            try:
-                                return_list.append(eval(line))
-                            except Exception as e:
-                                print(f'Error: {e}')
-                                print(f'Line: {line}')
-                                continue
 
-                    p_raw_msg.send((GENERAL_CHAN_ID, return_list))
-                    print(f"Sent message: {len(return_list)} elements")
                 dispatch_request = message[1]
             if p_audio.poll():
                 message = p_audio.recv()
