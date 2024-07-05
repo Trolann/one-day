@@ -12,21 +12,22 @@ intents.messages = True
 intents.members = True
 
 # Create bot instance
-bot = commands.Bot(command_prefix='$', intents=intents)
+bot = commands.Bot(command_prefix="$", intents=intents)
 
-systems_pipe: Pipe = None
-raw_message_pipe: Pipe = None
-image_pipe: Pipe = None
-audio_pipe: Pipe = None
+systems_pipe = None
+raw_message_pipe = None
+image_pipe = None
+audio_pipe = None
+
 
 @bot.event
 async def on_ready():
     systems_pipe.send((0, "Bot is ready"))
     send_raw_message.start()
-    print(f'{bot.user} has connected to Discord!')
-    print(f'Connected to the following guilds:')
+    print(f"{bot.user} has connected to Discord!")
+    print(f"Connected to {len(bot.guilds)} guilds:")
     for guild in bot.guilds:
-        print(f'{guild.name}(id: {guild.id})')
+        print(f"{guild.name}(id: {guild.id})")
 
 
 @bot.event
@@ -35,19 +36,16 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    if message.content.lower().startswith('!amazon'):
+    if message.content.lower().startswith("!amazon"):
         print(f"Received amazon command from {message.author}")
         raw_message_pipe.send((message.id, message.content))
         return
 
-
-
     # A simple ping pong to see if the bot is responding at all, before any other branches
-    if message.content.lower().startswith('ping?'):
+    if message.content.lower().startswith("ping?"):
         print(f"Received ping from {message.author}")
-        await message.reply('pong!')
+        await message.reply("pong!")
         return
-
 
     if message.attachments:
         images = []
@@ -58,23 +56,22 @@ async def on_message(message):
             else:
                 files.append(attachment.url)
 
-        request_dict = {
-            'message_id': message.id,
-            'prompt': message.content
-        }
+        request_dict = {"message_id": message.id, "prompt": message.content}
         if images:
-            request_dict['images'] = images
+            request_dict["images"] = images
             image_pipe.send(request_dict)
-        if '.ogg' in files[0]:
-            request_dict['audio'] = files
+        if ".ogg" in files[0]:
+            request_dict["audio"] = files
             audio_pipe.send(request_dict)
         return
     if message.content:
         raw_message_pipe.send((message.id, message.content))
 
+
 @bot.command()
 async def ping(ctx):
-    await ctx.send('pong!')
+    await ctx.send("pong!")
+
 
 # Bot loop to receive messages from parent process and send them to Discord
 @tasks.loop(seconds=0.1)
@@ -95,9 +92,9 @@ async def send_raw_message():
                         await channel.send(send_str)
                     except Exception as e:
                         print(f"Error: {e}")
-                        await channel.send(f'Error: {e}')
+                        await channel.send(f"Error: {e}")
                         print(f"Message: {send_str}")
-                print('Sent message')
+                print("Sent message")
             else:
                 print(f"Channel with id {channel_id} not found")
 
@@ -111,7 +108,9 @@ async def trim_messages(message):
         if len(send_str + item_str) <= 2000:
             send_str += item_str
         else:
-            send_strs.append(f"```python\n{send_str}\n```")  # Append the current string to send_strs
+            send_strs.append(
+                f"```python\n{send_str}\n```"
+            )  # Append the current string to send_strs
             send_str = item_str  # Start a new send_str with the current item
     # Make sure to add the last send_str if it's not empty
     if send_str:
@@ -119,7 +118,12 @@ async def trim_messages(message):
     return send_strs
 
 
-def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, image_pipe_to_parent: Pipe, audio_pipe_to_parent: Pipe):
+def run_bot(
+    systems_pipe_to_parent: Pipe,
+    raw_message_pipe_to_parent: Pipe,
+    image_pipe_to_parent: Pipe,
+    audio_pipe_to_parent: Pipe,
+):
     print("Starting bot")
     global raw_message_pipe
     global systems_pipe
@@ -131,6 +135,7 @@ def run_bot(systems_pipe_to_parent: Pipe, raw_message_pipe_to_parent: Pipe, imag
     audio_pipe = audio_pipe_to_parent
     asyncio.run(bot.start(DISCORD_API_KEY))
 
-if __name__ == '__main__':
-    print('Starting the asyncio loop')
+
+if __name__ == "__main__":
+    print("Starting the asyncio loop")
     asyncio.run(run_bot())
