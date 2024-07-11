@@ -1,19 +1,17 @@
-FROM python:bookworm
+FROM one-day-base:2024.7.3 AS app
 
 WORKDIR /app
 
-# Update apt and install git
-RUN apt-get update && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/*
-
-# Clone the repository
-RUN git clone https://github.com/Trolann/one-day.git .
+# Copy specific files and directories
+COPY oneday.py settings.py requirements.txt ./
+COPY outputs/ ./outputs/
+COPY inputs/ ./inputs/
+COPY dispatch/ ./dispatch/
 
 # Copy the .env file from the host to the container
 COPY .env .
 
-# Install Python dependencies
+# Reinstall requirements in case they've changed
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run the Python script

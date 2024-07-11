@@ -5,7 +5,8 @@ from settings import GENERAL_CHAN_ID
 from inputs.new_image import process_image_requests
 from inputs.new_audio import download_and_convert, get_transcript
 from outputs.list_parser import parse_list
-from logging import getLogger
+from logging import getLogger, basicConfig, StreamHandler, DEBUG
+from sys import stdout
 
 if __name__ == "__main__":
     # Set up a pipe for each task on the other side to consume
@@ -13,8 +14,15 @@ if __name__ == "__main__":
     p_raw_msg, c_raw_msg = Pipe()
     p_images, c_images = Pipe()
     p_audio, c_audio = Pipe()
-    logger = getLogger(__name__)
-    logger.setLevel('DEBUG')
+    # Set up the logger
+    print('starting')
+    basicConfig(
+        level=DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            StreamHandler(stdout)
+        ]
+    )
 
     # Start discord bot
     bot = Process(
@@ -27,6 +35,8 @@ if __name__ == "__main__":
         ),
     )
     bot.start()
+    logger = getLogger(__name__)
+    logger.setLevel('DEBUG')
     logger.info("Waiting for bot to start")
     while not p_systems.poll():
         sleep(1)  # Wait for bot to start

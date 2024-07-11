@@ -1,3 +1,5 @@
+import logging
+
 import discord
 from time import time, sleep
 from discord.ext import commands, tasks
@@ -138,4 +140,5 @@ def run_bot(
 
 if __name__ == "__main__":
     print("Starting the asyncio loop")
+    discord.utils.setup_logging(level=logging.INFO)
     asyncio.run(run_bot())

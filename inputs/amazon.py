@@ -5,10 +5,9 @@ from selenium.webdriver.common.by import By
 from time import sleep
 from bs4 import BeautifulSoup
 from anthropic import Client
-from anthropic.types.beta.tools import ToolParam
+from anthropic.types.tool_param import ToolParam
 from settings import AMAZON_LOGIN, AMAZON_PASSWORD, OPUS, SONNET, HAIKU
 from datetime import datetime
-
 
 class AmazonTransactionFinder:
 
@@ -161,7 +160,7 @@ class AmazonTransactionFinder:
     def parse_transaction_text(self, text, order_id):
         messages = [{"role": "user", "content": f"Request:\n{text}"}]
         print('Calling Claude')
-        response = self.client.beta.tools.messages.create(
+        response = self.client.messages.create(
             model=self.MODEL,
             max_tokens=4096,
             tools=self.tools,
@@ -174,7 +173,7 @@ class AmazonTransactionFinder:
             messages.append({"role": "user", "content": "This is incorrect, respond with a tool call. "
                                                         "Please provide a tool call"})
             retries_left -= 1
-            response = self.client.beta.tools.messages.create(
+            response = self.client.messages.create(
                 model=self.MODEL,
                 max_tokens=4096,
                 tools=self.tools,

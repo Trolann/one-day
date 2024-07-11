@@ -10,7 +10,7 @@ client = Client()
 def parse_list(text):
     messages = [{"role": "user", "content": f"Today's date is: {datetime.now().isoformat()}\nRequest:\n{text}"}]
     print('Calling Claude')
-    response = client.beta.tools.messages.create(
+    response = client.messages.create(
         model=SONNET,
         max_tokens=4096,
         tools=list_tools,
@@ -23,7 +23,7 @@ def parse_list(text):
         messages.append({"role": "user", "content": "This is incorrect, respond with a tool call. "
                                                     "Please provide a tool call"})
         retries_left -= 1
-        response = client.beta.tools.messages.create(
+        response = client.messages.create(
             model=SONNET,
             max_tokens=4096,
             tools=list_tools,

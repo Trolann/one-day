@@ -55,7 +55,7 @@ def process_image_requests(image_requests: list):
             print("Added image url to message")
         print(message)
         response = client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o-2024-05-13",
             messages=message,
             max_tokens=300,
         )
