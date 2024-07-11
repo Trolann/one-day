@@ -11,6 +11,7 @@ from datetime import datetime
 
 
 class AmazonTransactionFinder:
+
     def __init__(self, headless=True):
         self.client = Client()
         self.MODEL = HAIKU

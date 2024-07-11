@@ -5,6 +5,7 @@ from settings import GENERAL_CHAN_ID
 from inputs.new_image import process_image_requests
 from inputs.new_audio import download_and_convert, get_transcript
 from outputs.list_parser import parse_list
+from logging import getLogger
 
 if __name__ == "__main__":
     # Set up a pipe for each task on the other side to consume
@@ -12,6 +13,8 @@ if __name__ == "__main__":
     p_raw_msg, c_raw_msg = Pipe()
     p_images, c_images = Pipe()
     p_audio, c_audio = Pipe()
+    logger = getLogger(__name__)
+    logger.setLevel('DEBUG')
 
     # Start discord bot
     bot = Process(
@@ -24,10 +27,10 @@ if __name__ == "__main__":
         ),
     )
     bot.start()
-    print("Waiting for bot to start")
+    logger.info("Waiting for bot to start")
     while not p_systems.poll():
         sleep(1)  # Wait for bot to start
-    print(p_systems.recv()[1])  # clear the systems pipe
+    logger.debug(p_systems.recv()[1])  # clear the systems pipe
 
     try:
         while True:
@@ -54,7 +57,7 @@ if __name__ == "__main__":
                 p_raw_msg.send((GENERAL_CHAN_ID, "```\n" + dispatch_request + "\n```"))
             if p_raw_msg.poll():
                 message = p_raw_msg.recv()
-                print(f"Received message: {message}")
+                logger.debug(f"Received message: {message}")
 
                 dispatch_request = message[1]
             if p_audio.poll():
@@ -74,4 +77,4 @@ if __name__ == "__main__":
     finally:
         bot.kill()
         bot.join()
-        print("Bot terminated")
+        logger.error("Bot terminated")
